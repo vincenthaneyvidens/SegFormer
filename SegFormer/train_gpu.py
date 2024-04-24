@@ -118,7 +118,7 @@ def main(args):
                                             shuffle=True,
                                             num_workers=4)
 
-    # model = make_SegFormerB1(num_classes=args.num_classes)
+    model = make_SegFormerB1(num_classes=20)
 
     # if args.DDP:
     #     sampler = DistributedSampler(train_set, dist.get_world_size(), dist.get_rank(), shuffle=True)
