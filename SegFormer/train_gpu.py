@@ -89,6 +89,7 @@ def main(args):
         os.makedirs(args.save_weights_dir)
 
     # start = time.time()
+    mean_iou = 0.0
     best_mIoU = 0.0
     device = args.device
 
