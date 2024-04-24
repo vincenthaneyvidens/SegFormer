@@ -29,8 +29,6 @@ def train_one_epoch(args, model, optimizer, loss_fn, dataloader, scheduler,
         else:
             logits = model(img)
             lbl = lbl.squeeze(1).long()
-            print(lbl)
-            print(logits)
             loss = loss_fn(logits, lbl)
 
         if scaler is not None:
