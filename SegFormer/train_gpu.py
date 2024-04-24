@@ -48,7 +48,7 @@ def get_argparser():
 
     # Train Options
     parser.add_argument("--amp", type=bool, default=True, help='auto mixture precision') # There may be some problems when loading weights, such as: ComplexFloat
-    parser.add_argument("--epochs", type=int, default=2, help='total training epochs')
+    parser.add_argument("--epochs", type=int, default=10, help='total training epochs')
     parser.add_argument("--device", type=str, default='cuda:0', help='device (cuda:0 or cpu)')
     parser.add_argument("--num_workers", type=int, default=0,
                         help='num_workers, set it equal 0 when run programs in win platform')
