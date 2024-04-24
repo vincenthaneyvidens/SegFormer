@@ -8,12 +8,9 @@ import utils.distributed_utils as utils
 
 
 
-def train_one_epoch(args, model, optimizer, loss_fn, dataloader, sampler, scheduler,
+def train_one_epoch(args, model, optimizer, loss_fn, dataloader, scheduler,
                     epoch, device, print_freq, scaler=None):
     model.train()
-
-    if args.DDP:
-        sampler.set_epoch(epoch)
 
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))

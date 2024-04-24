@@ -5,6 +5,8 @@ import datetime
 import argparse
 import yaml
 import time
+import torchvision
+import PIL
 import multiprocessing as mp
 from tabulate import tabulate
 from tqdm import tqdm
@@ -24,7 +26,7 @@ from utils.schedulers import get_scheduler, create_lr_scheduler
 from utils.optimizers import get_optimizer
 from utils.utils import fix_seeds, setup_cudnn, cleanup_ddp, setup_ddp
 from engine import train_one_epoch, evaluate
-
+from torchvision import transforms
 
 
 
@@ -92,30 +94,48 @@ def main(args):
 
     results_file = "results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
 
-    train_transform = get_train_augmentation(args.image_size, seg_fill=args.ignore_label)
-    val_transform = get_val_augmentation(args.image_size)
+    #train_transform = get_train_augmentation(args.image_size, seg_fill=args.ignore_label)
+    #val_transform = get_val_augmentation(args.image_size)
 
-    train_set = CityScapes(args.data_root, 'train', train_transform)
-    valid_set = CityScapes(args.data_root, 'val', val_transform)
+    # train_set = CityScapes(args.data_root, 'train', train_transform)
+    # valid_set = CityScapes(args.data_root, 'val', val_transform)
+    batch_size = 4
 
-    model = make_SegFormerB1(num_classes=args.num_classes)
+    data = torchvision.datasets.VOCSegmentation(f'{os.getcwd()}/VOC2012/', year='2012', download=True, transform = transforms.Compose([transforms.Resize((256, 256), interpolation=PIL.Image.BILINEAR), transforms.ToTensor()]), target_transform=transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize((256, 256), interpolation=PIL.Image.BILINEAR),
+    ]), image_set ="train")
+    trainloader = torch.utils.data.DataLoader(data,
+                                            batch_size=batch_size,
+                                            shuffle=True,
+                                            num_workers=4)
+    data_val = torchvision.datasets.VOCSegmentation(f'{os.getcwd()}/VOC2012/', year='2012', download=True, transform = transforms.Compose([transforms.Resize((256, 256), interpolation=PIL.Image.BILINEAR), transforms.ToTensor()]), target_transform=transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize((256, 256), interpolation=PIL.Image.BILINEAR),
+    ]), image_set ="val")
+    valloader = torch.utils.data.DataLoader(data_val,
+                                            batch_size=batch_size,
+                                            shuffle=True,
+                                            num_workers=4)
 
-    if args.DDP:
-        sampler = DistributedSampler(train_set, dist.get_world_size(), dist.get_rank(), shuffle=True)
-        model = DDP(model, device_ids=[args.gpu_id])
-    else:
-        sampler = RandomSampler(train_set)
+    # model = make_SegFormerB1(num_classes=args.num_classes)
+
+    # if args.DDP:
+    #     sampler = DistributedSampler(train_set, dist.get_world_size(), dist.get_rank(), shuffle=True)
+    #     model = DDP(model, device_ids=[args.gpu_id])
+    # else:
+    #     sampler = RandomSampler(train_set)
 
 
-    trainloader = DataLoader(train_set, batch_size=args.batch_size, num_workers=args.num_workers,
-                             drop_last=True, pin_memory=args.pin_mem, sampler=sampler)
+    # trainloader = DataLoader(train_set, batch_size=args.batch_size, num_workers=args.num_workers,
+    #                          drop_last=True, pin_memory=args.pin_mem, sampler=sampler)
 
-    valloader = DataLoader(valid_set, batch_size=args.val_batch_size, num_workers=args.num_workers,
-                           drop_last=True, pin_memory=args.pin_mem)
+    # valloader = DataLoader(valid_set, batch_size=args.val_batch_size, num_workers=args.num_workers,
+    #                        drop_last=True, pin_memory=args.pin_mem)
 
-    iters_per_epoch = len(train_set) // args.batch_size
+    iters_per_epoch = len(trainloader.dataset) // args.batch_size
 
-    loss_fn = get_loss(args.loss_fn_name, train_set.ignore_label, None)
+    loss_fn = get_loss(args.loss_fn_name, 255, None)
     optimizer = get_optimizer(model, args.optimizer, args.lr, args.weight_decay)
 
     # scheduler = get_scheduler(args.lr_scheduler, optimizer, args.epochs * iters_per_epoch, args.lr_power,
@@ -146,7 +166,7 @@ def main(args):
     model = model.to(device)
     for epoch in range(args.epochs):
 
-        mean_loss, lr = train_one_epoch(args, model, optimizer, loss_fn, trainloader, sampler, scheduler,
+        mean_loss, lr = train_one_epoch(args, model, optimizer, loss_fn, trainloader, scheduler,
                                      epoch, device, args.train_print_freq, scaler)
 
         confmat = evaluate(args, model, valloader, device, args.val_print_freq)
