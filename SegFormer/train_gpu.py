@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 import re
 import torch
@@ -5,6 +7,9 @@ import datetime
 import argparse
 import yaml
 import time
+import PIL
+import torchvision
+from torchvision import transforms
 import multiprocessing as mp
 from tabulate import tabulate
 from tqdm import tqdm
@@ -16,6 +21,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DistributedSampler, RandomSampler
 from torch import distributed as dist
 from timm.models import create_model
+from utils.visualize import visualize_dataset_sample
 from models import *
 from datasets import *
 from utils.augmentations import get_train_augmentation, get_val_augmentation
@@ -26,19 +32,17 @@ from utils.utils import fix_seeds, setup_cudnn, cleanup_ddp, setup_ddp
 from engine import train_one_epoch, evaluate
 
 
-
-
 def get_argparser():
     parser = argparse.ArgumentParser('Pytorch SegFormer Models training and evaluation script', add_help=False)
 
     # Datset Options
-    parser.add_argument("--data_root", type=str, default='./CityScapesDataset',help="path to Dataset")
-    parser.add_argument("--image_size", type=int, default=[512, 512], help="input size")
+    parser.add_argument("--data_root", type=str, default='./VOC2012',help="path to Dataset")
+    parser.add_argument("--image_size", type=int, default=[256, 256], help="input size")
     parser.add_argument("--ignore_label", type=int, default=255, help="path to Dataset")
     parser.add_argument("--dataset", type=str, default='cityscapes',choices=['cityscapes'], help='Name of dataset')
-    parser.add_argument("--num_classes", type=int, default=19, help="num classes (default: None)")
+    parser.add_argument("--num_classes", type=int, default=21, help="num classes (default: None)")
     parser.add_argument("--pin_mem", type=bool, default=False, help="Dataloader ping_memory")
-    parser.add_argument("--batch_size", type=int, default=4,help='batch size (default: 4)') # consume approximately 3G GPU-Memory
+    parser.add_argument("--batch_size", type=int, default=4,help='batch size (default: 6)') # consume approximately 3G GPU-Memory
     parser.add_argument("--val_batch_size", type=int, default=2,help='batch size for validation (default: 2)')
 
     # SegFormer Options
@@ -46,12 +50,12 @@ def get_argparser():
 
     # Train Options
     parser.add_argument("--amp", type=bool, default=True, help='auto mixture precision') # There may be some problems when loading weights, such as: ComplexFloat
-    parser.add_argument("--epochs", type=int, default=2, help='total training epochs')
+    parser.add_argument("--epochs", type=int, default=5, help='total training epochs')
     parser.add_argument("--device", type=str, default='cuda:0', help='device (cuda:0 or cpu)')
     parser.add_argument("--num_workers", type=int, default=0,
                         help='num_workers, set it equal 0 when run programs in win platform')
     parser.add_argument("--DDP", type=bool, default=False)
-    parser.add_argument("--train_print_freq", type=int, default=100)
+    parser.add_argument("--train_print_freq", type=int, default=20)
     parser.add_argument("--val_print_freq", type=int, default=50)
 
     # Loss Options
@@ -95,8 +99,11 @@ def main(args):
     train_transform = get_train_augmentation(args.image_size, seg_fill=args.ignore_label)
     val_transform = get_val_augmentation(args.image_size)
 
-    train_set = CityScapes(args.data_root, 'train', train_transform)
-    valid_set = CityScapes(args.data_root, 'val', val_transform)
+    # train_set = CityScapes(args.data_root, 'train', train_transform)
+    # valid_set = CityScapes(args.data_root, 'val', val_transform)
+
+    train_set = VOC2012(args.data_root, 'train', train_transform)
+    valid_set = VOC2012(args.data_root, 'val', val_transform)
 
     model = make_SegFormerB1(num_classes=args.num_classes)
 
@@ -166,6 +173,8 @@ def main(args):
         match = re.search(r'mean IoU:\s+(\d+\.\d+)', text)
         if match:
             mean_iou = float(match.group(1))
+        else:
+            mean_iou = 0.0
             
         if mean_iou > best_mIoU:
             best_mIoU = mean_iou
@@ -191,6 +200,7 @@ def main(args):
 
 
 if __name__ == '__main__':
+    # visualize_dataset_sample(VOC2012, './VOC2012')
     parser = argparse.ArgumentParser(
         'Pytorch SegFormer Models training and evaluation script', parents=[get_argparser()])
     args = parser.parse_args()
