@@ -184,7 +184,7 @@ def main(args):
                 "scheduler_state": scheduler.state_dict(),
                 "best_mIoU": best_mIoU
             }
-            if args.amp:
+            if args.amp and scaler != None:
                 checkpoint_save['scaler'] = scaler.state_dict()
             torch.save(checkpoint_save, f'{args.save_weights_dir}/best_model.pth')
 
